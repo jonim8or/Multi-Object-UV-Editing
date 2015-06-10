@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Multi Object UV Editing",
     "author": "Andreas Esau",
-    "version": (0,9,1),
+    "version": (0,9,2),
     "blender": (2, 7, 4),
     "location": "Object Tools",
     "description": "This Addon enables a quick way to create one UV Layout for multiple objects.",
@@ -47,6 +47,8 @@ class MultiObjectUVEdit(bpy.types.Operator):
     def leave_editing_mode(self,context):
         selected_objects = []
         active_object = None
+        mesh_select_mode = list(context.tool_settings.mesh_select_mode)
+        context.tool_settings.mesh_select_mode = (True,False,False)
         
         ### create array of tmp selected objects
         for object in context.selected_objects:
@@ -78,7 +80,7 @@ class MultiObjectUVEdit(bpy.types.Operator):
                     new_uv_layer = bpy.data.objects[v_group.name].data.uv_textures.new(tmp_obj.data.uv_textures.active.name)
                     bpy.data.objects[v_group.name].data.uv_textures.active = new_uv_layer
                 else:
-                    bpy.data.objects[v_group.name].data.uv_textures.active = tmp_obj.data.uv_textures.active
+                    bpy.data.objects[v_group.name].data.uv_textures.active = bpy.data.objects[v_group.name].data.uv_textures[self.multi_object.data.uv_textures.active.name]
                 bpy.ops.object.join_uvs()
                 
             ### delete the tmp object
@@ -90,6 +92,7 @@ class MultiObjectUVEdit(bpy.types.Operator):
             bpy.ops.object.mode_set(mode='EDIT')        
         
         ### restore everything
+        context.tool_settings.mesh_select_mode = mesh_select_mode
         bpy.ops.object.mode_set(mode="OBJECT")
         bpy.context.scene.objects.unlink(self.multi_object)
         bpy.data.objects.remove(self.multi_object)
@@ -121,9 +124,6 @@ class MultiObjectUVEdit(bpy.types.Operator):
             ob.select = False
 
         for i,ob in enumerate(objects):
-            #no need to use modifier for copying,
-            #also no need to duplicate the meshes. We will duplicate only for the object we'll be joining into,
-            #and that we do later on.
             dupli_ob = ob.copy()
             context.scene.objects.link(dupli_ob)
             dupli_objects.append(dupli_ob)
@@ -140,6 +140,7 @@ class MultiObjectUVEdit(bpy.types.Operator):
         self.multi_object.data = self.multi_object.data.copy()
         bpy.ops.object.join()
         self.multi_object.name = "Multi_UV_Object"
+          
     
     def modal(self, context, event):
         
@@ -178,7 +179,8 @@ class MultiObjectUVEdit(bpy.types.Operator):
             object.hide = True
         
         bpy.ops.object.mode_set(mode="EDIT")
-       
+        bpy.ops.mesh.select_all(action='SELECT')
+
         return {'RUNNING_MODAL'}
 
 def add_object_tools(self,context):
