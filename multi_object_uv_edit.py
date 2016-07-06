@@ -1,5 +1,4 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
-
 #
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -20,7 +19,7 @@
 bl_info = {
     "name": "Multi Object UV Editing",
     "author": "Andreas Esau",
-    "version": (0,9,3),
+    "version": (0,9,7),
     "blender": (2, 7, 4),
     "location": "Object Tools",
     "description": "This Addon enables a quick way to create one UV Layout for multiple objects.",
@@ -56,7 +55,10 @@ class MultiObjectUVEdit(bpy.types.Operator):
         context.tool_settings.mesh_select_mode = (True,False,False)
         self.multi_object.select = True
         context.scene.objects.active = self.multi_object
-            
+        
+        ### unhide all vertices
+        bpy.ops.mesh.reveal()
+    
         ### copy uvs based on the vertex groups to its final object
         for v_group in self.multi_object.vertex_groups:
             
@@ -110,9 +112,12 @@ class MultiObjectUVEdit(bpy.types.Operator):
         bpy.ops.ed.undo_push(message="Multi UV edit") 
     
     def assign_tex_to_uv(self,src_uv,dst_uv):
-        for i,data in enumerate(src_uv.data):
-            image = data.image
-            dst_uv.data[i].image = image
+        if len(src_uv.data) == len(dst_uv.data):
+            for i,data in enumerate(src_uv.data):
+                image = data.image
+                dst_uv.data[i].image = image
+        else:
+            self.report({'INFO'}, "Mesh has been edited. Modifying UVS is not possible for edited meshes.")
         
     def select_vertex_group(self,ob,group_name):
         bpy.ops.object.mode_set(mode='EDIT')
@@ -141,6 +146,9 @@ class MultiObjectUVEdit(bpy.types.Operator):
             if ob.type == 'MESH':
                 dupli_ob = ob.copy()
                 context.scene.objects.link(dupli_ob)
+                dupli_me = dupli_ob.data.copy()
+                dupli_ob.data = dupli_me
+                
                 dupli_objects.append(dupli_ob)
                 for group in dupli_ob.vertex_groups:
                     dupli_ob.vertex_groups.remove(group)
@@ -159,13 +167,19 @@ class MultiObjectUVEdit(bpy.types.Operator):
           
     
     def modal(self, context, event):
-        if event.type in ['TAB'] or self.multi_object.mode == "OBJECT":
+        if (event.type in ['TAB'] and not event.ctrl and not event.shift and not event.oskey) or self.multi_object.mode == "OBJECT":
             self.report({'INFO'}, "Multi Object UV Editing done.")
             self.leave_editing_mode(context)
             return {'CANCELLED'}
         return {'PASS_THROUGH'}
 
     def invoke(self, context, event):
+        ### leave local view, prevents blender to crash when joining objects
+        if context.area.spaces.active.local_view != None:
+            override = bpy.context.copy()
+            override["area"] = context.area
+            bpy.ops.view3d.localview(override)
+        
         ### reset variables
         self.multi_object = None
         context.window_manager.modal_handler_add(self)
@@ -189,7 +203,8 @@ class MultiObjectUVEdit(bpy.types.Operator):
         ###switch to edit mode
         bpy.ops.object.mode_set(mode="EDIT")
         bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.uv.select_all(action='SELECT')
+        if len(self.multi_object.data.uv_textures) > 0:
+            bpy.ops.uv.select_all(action='SELECT')
 
         return {'RUNNING_MODAL'}
 
